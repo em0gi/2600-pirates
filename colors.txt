@@ -1,0 +1,8 @@
+CaptainJack,#f1e7c9
+iamfoxy,#ffd478
+dclaw,#b0e777
+notOo,#00d6f8
+Oo,#ff2600
+hazeyez,#ff2600
+krylon,#d4fb78
+oi,#929000

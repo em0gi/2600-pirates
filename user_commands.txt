@@ -1,0 +1,39 @@
+[General]
+p sponsor <user> aye
+p save <user>
+p catch <user>
+[Mean]
+p fight <user>
+p duel aye <user>
+p steal <user>
+p troll <user>
+p dj <user>
+p sex <user>
+p lockpick <user> aye
+p bounty <user> max
+p insult <user>
+[games]
+p amssm <user> max
+p drink <user> max
+p dice <user> max
+p bomb <user>
+[fights]
+p fight restore <user>
+p save <user>
+p fight revive <user>
+[Captain]
+p captain bonus <user>
+p captain brig <user>
+p captain voucher <user>
+p captain map <user>
+[user info]
+p money <user>
+p chest <user>
+p rep <user>
+p info <user>
+p bio <user>
+p power <user>
+p weapons <user>
+p tasks <user>
+p disease <user>
+

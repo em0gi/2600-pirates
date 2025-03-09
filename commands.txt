@@ -1,0 +1,166 @@
+[General]
+p chest
+p top
+p work
+p dig
+p dive
+p fish
+p options
+p tasks
+p treasure search
+p search
+p bounties
+p aye
+p bored
+p rusty
+p explore
+p explore aye
+p disease
+p money
+p awake
+p weapons
+p mental
+p stash
+p save
+p cast starboard bow
+p cast port bow
+p love
+p store buy refill
+p flask sip
+p level
+[ship]
+p ship status
+p ship top
+p ship upgrades
+p ship stats
+p ship info
+[ship tasks]
+p ship tasks
+P restock
+P rope
+P anchor
+P offload
+P replace
+p load exploding shot
+[crew]
+p crew start clean
+p crew clean aye
+p crew grease aye
+p crew repair start
+p crew repair aye
+[captain]
+p captain command
+p captain special aye
+p captain crew bonus
+p captain share aye
+p captain rest
+p captain rumor aye
+p captain employ aye
+p requests
+[fight]
+p fight
+p fight shoot
+p fight jab
+p fight chop
+p fight joust
+P Fight fire
+P Fight heal
+P Fight load
+P Fight slice
+P Fight repair
+P Fight stab
+p fight fling
+p fight unlock aye
+p flask sip
+p rewards stamina aye
+p store buy refill
+p store rum
+p fight fire exploding
+p fight fire chain
+p fight load exploding
+p stamina
+P Fight crucifix
+P Fight holy water
+P Fight lantern
+P Fight mirror
+P Fight salt
+P Fight smudge stick
+P Fight pray
+P Fight spyglass
+p raid fire exploding
+p defend
+p defend shoot
+p defend thrust
+p defend fire exploding
+p flask sip
+p rewards stamina aye
+p store buy refill
+p store rum
+p defend load exploding
+p save
+[games]
+p games
+p game pots
+p bj stay
+p bj hit
+p bj join
+p blackjack start max
+p dice accept
+p drink accept
+p wordel start
+[rewards]
+p rewards
+p rewards doubloons aye
+p rewards stamina aye
+p rewards ornamental aye
+p rewards power aye
+p rewards randomvoucher aye
+[faction]
+p decoderen aye
+[store]
+p store
+p store sell gun
+p store buy gun
+p store sell sword
+p store buy sword
+p store coffee
+p store rum
+p store buy refill
+p lottery
+p store buy lottery auto 10
+[storm]
+P Storm double
+P Storm triple
+P Storm lay
+[sw]
+p sw buy exploding shot
+p sw buy chain shot
+p sw buy repair
+p sw buy clean
+p sw buy grease
+[market]
+p market buy food lamb pye
+p market
+[invest]
+p invest collect
+p invest invest tavern aye
+p invest invest brothel aye
+[comments]
+ffs
+\o/
+shhhhhhhhhhhhhhhh
+sure
+yes
+no
+nah
+lol
+lolz
+yay
+[low]
+p carry
+p clean
+p swab
+p steer
+p fix
+p cook
+p repair

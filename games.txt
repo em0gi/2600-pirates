@@ -1,0 +1,17 @@
+[amssm]
+accept,captainjack,p amssm accept
+shark,captainjack,p amssm shark
+Anchor,captainjack,p amssm Anchor
+Map,captainjack,p amssm Map
+Sword,captainjack,p amssm Sword
+Mruno,captainjack,p amssm Mruno
+[duel]
+Accept,captainjack,p duel accept
+Thrust,captainjack,p duel thrust
+Parry,captainjack,p duel parry
+Flunge,captainjack,p duel flunge
+Stab,captainjack,p duel stab
+Deflect,captainjack,p duel deflect
+Slash,captainjack,p duel slash
+Dodge,captainjack,p duel dodge
+Counter,captainjack,p duel counter

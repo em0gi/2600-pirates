@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import tkinter as tk
-from tkinter import scrolledtext, Listbox, END, Menu, messagebox
-from tkinter import ttk
+from tkinter import Listbox, END, Menu, messagebox, ttk
 import irc.client
 import queue
 import threading
@@ -12,7 +11,6 @@ from PIL import Image, ImageTk, ImageEnhance
 import tkinter.colorchooser as colorchooser
 
 
-
 # Hardcoded ZNC connection details
 ZNC_SERVER = "<server ip>"
 ZNC_PORT = <PORTNUM>
@@ -20,10 +18,6 @@ IRC_NICKNAME = "<ZNC Nick>"
 ZNC_USERNAME = "<znc user> same as nick for now"
 NETWORK = "<Irc network you setup in your bouncer"
 ZNC_PASSWORD = "<password duh>"
-
-
-# Don't touch, for future dev
-SERVER_IDENTIFIED_NICK=""
 
 # Set up logging to console
 logging.basicConfig(
@@ -34,22 +28,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Global queues for thread communication
-incoming_queue = queue.Queue()  # IRC events to GUI
-send_queue = queue.Queue()      # GUI messages to IRC
-raw_send_queue = queue.Queue()  # Raw commands from service clients to IRC
-user_colors = {}                # Username to color mapping
-message_history = []            # List to store sent messages
-history_index = -1              # Index to track position in history
-current_column_count = 6        # Default column count
+incoming_queue = queue.Queue()
+send_queue = queue.Queue()
+raw_send_queue = queue.Queue()
+user_colors = {}
+message_history = []
+history_index = -1
+current_column_count = 6
 
 # Service-related globals
 service_running = False
 stop_event = None
 server_thread = None
-client_infos = []  # List of (client_socket, client_queue)
+client_infos = []
 client_queues_lock = threading.Lock()
 
-
+#future use
+SERVER_IDENTIFIED_NICK = ""
 
 # mIRC color mapping to Tkinter color names
 mirc_colors = {
@@ -67,8 +62,9 @@ except FileNotFoundError:
     logger.error("Dictionary file 'filtered-american-english.txt' not found.")
     dictionary = []
 
+### Helper Functions
+
 def match_word(word_pattern, word, exclude_chars='', include_chars=''):
-    """Check if a word matches the pattern, excludes certain characters, and includes others."""
     if len(word_pattern) != len(word):
         return False
     for i, char in enumerate(word_pattern):
@@ -82,7 +78,6 @@ def match_word(word_pattern, word, exclude_chars='', include_chars=''):
     return True
 
 def parse_mirc_message(message):
-    """Parse the message for mIRC control codes and return segments with formatting state."""
     segments = []
     current_text = ''
     state = {'fg': 'default', 'bold': False, 'underline': False}
@@ -131,15 +126,7 @@ def parse_mirc_message(message):
         segments.append((current_text, state.copy()))
     return segments
 
-def get_tag_name(state):
-    """Generate a tag name for mIRC formatting, excluding background."""
-    fg = state['fg'] if state['fg'] != 'default' else 'def'
-    bold = 'b' if state['bold'] else ''
-    underline = 'u' if state['underline'] else ''
-    return f"tag_{fg}_{bold}_{underline}"
-
 def load_commands():
-    """Read commands from commands.txt and user_commands.txt, parsing tabs and sub-menus."""
     try:
         with open('commands.txt', 'r') as f:
             lines = [line.strip() for line in f if line.strip()]
@@ -154,7 +141,6 @@ def load_commands():
                 commands[current_tab].append(line)
     except FileNotFoundError:
         commands = {"General": []}
-
     try:
         with open('user_commands.txt', 'r') as f:
             lines = [line.strip() for line in f if line.strip()]
@@ -169,11 +155,9 @@ def load_commands():
                 user_commands[current_menu].append(line)
     except FileNotFoundError:
         user_commands = {"General": []}
-
     return commands, user_commands
 
 def load_games():
-    """Read games from games.txt with [game] as menu/window title and button,recipient,message lines."""
     games_dict = {}
     try:
         with open('games.txt', 'r') as f:
@@ -194,7 +178,6 @@ def load_games():
     return games_dict
 
 def open_game_window(game_name, actions):
-    """Open a new window with the game name as title and buttons for each action."""
     game_window = tk.Toplevel(root)
     game_window.title(game_name)
     game_window.geometry("300x200")
@@ -205,17 +188,15 @@ def open_game_window(game_name, actions):
         btn.pack(pady=5, padx=10, fill='x')
 
 def send_private_message(recipient, message):
-    """Send a private message to the specified recipient."""
     send_queue.put(f"PRIVMSG {recipient} :{message}")
     logger.info(f"Queued private message to {recipient}: {message}")
 
 def open_wordel_window():
-    """Open a new window with text fields for Wordel Helper input and an output area."""
     wordel_window = tk.Toplevel(root)
     wordel_window.title("Wordel Helper")
     wordel_window.geometry("400x300")
     tk.Label(wordel_window, text="Matching Words").pack(pady=(5, 0))
-    output_area = scrolledtext.ScrolledText(wordel_window, wrap='word', height=10, state='disabled')
+    output_area = tk.Text(wordel_window, wrap='word', height=10, state='disabled')
     output_area.pack(pady=5, padx=5, fill='both', expand=True)
     fields_frame = tk.Frame(wordel_window)
     fields_frame.pack(pady=5, padx=5, fill='x')
@@ -251,7 +232,6 @@ def open_wordel_window():
     search_btn.pack(pady=5)
 
 def toggle_service(port_entry, status_label, toggle_button):
-    """Toggle the service on or off."""
     global service_running, stop_event, server_thread
     if service_running:
         stop_event.set()
@@ -278,7 +258,6 @@ def toggle_service(port_entry, status_label, toggle_button):
         port_entry.config(state='normal')
 
 def open_service_window():
-    """Open the service settings window."""
     global service_window
     if 'service_window' in globals() and service_window.winfo_exists():
         service_window.lift()
@@ -305,6 +284,8 @@ def open_service_window():
     update_ui()
     service_window.protocol("WM_DELETE_WINDOW", service_window.destroy)
 
+### IRC Client Class
+
 class MyIRCClient(irc.client.SimpleIRCClient):
     def __init__(self, nickname, znc_username, network, znc_password):
         irc.client.SimpleIRCClient.__init__(self)
@@ -312,7 +293,7 @@ class MyIRCClient(irc.client.SimpleIRCClient):
         self.znc_username = znc_username
         self.network = network
         self.znc_password = znc_password
-        self.user_list = []  # List of dicts: {'nick': 'name', 'op': bool, 'voiced': bool, 'away': bool}
+        self.user_list = []
         self.authenticated = False
 
     def on_all_raw_messages(self, connection, event):
@@ -452,6 +433,8 @@ class MyIRCClient(irc.client.SimpleIRCClient):
             incoming_queue.put({'type': 'userlist', 'users': self.user_list})
             logger.info(f"User returned from away: {nick}")
 
+### Thread Functions
+
 def irc_thread_func():
     incoming_queue.put({'type': 'status', 'text': 'Connecting...'})
     logger.info(f"Attempting to connect to {ZNC_SERVER}:{ZNC_PORT}")
@@ -564,6 +547,8 @@ def client_writer(client_socket, client_queue, stop_event, client_infos):
                     break
         client_socket.close()
 
+### GUI Event Handlers
+
 def send_message(event=None):
     global history_index
     message = entry.get()
@@ -603,22 +588,20 @@ def navigate_history(direction):
         entry.insert(0, message_history[history_index])
 
 def refresh_commands():
-    """Refresh commands from files and update the button layout."""
     global all_commands, current_user_commands
     commands, user_commands = load_commands()
     all_commands = commands
     current_user_commands = user_commands
     create_command_tabs(current_column_count)
+    update_commands_menu()
     logger.info("Refreshed command tabs and user commands")
 
 def set_column_count(count):
-    """Set the current column count and update the command tabs."""
     global current_column_count
     current_column_count = count
     create_command_tabs(count)
 
 def create_command_tabs(column_count):
-    """Create notebook tabs with buttons arranged in specified number of columns."""
     for widget in cmd_frame.winfo_children():
         widget.destroy()
     notebook = ttk.Notebook(cmd_frame)
@@ -633,6 +616,15 @@ def create_command_tabs(column_count):
             btn.grid(row=row, column=col, sticky='ew', padx=2, pady=2)
         for c in range(column_count):
             tab.grid_columnconfigure(c, weight=1)
+
+def update_commands_menu():
+    """Update the Commands menu with the current commands."""
+    commands_menu.delete(0, 'end')
+    for tab_name, cmd_list in all_commands.items():
+        sub_menu = tk.Menu(commands_menu, tearoff=0)
+        commands_menu.add_cascade(label=tab_name, menu=sub_menu)
+        for cmd in cmd_list:
+            sub_menu.add_command(label=cmd, command=lambda c=cmd: send_queue.put(c))
 
 def on_right_click(event):
     try:
@@ -669,7 +661,6 @@ def on_right_click(event):
         logger.error(f"Failed to open right-click menu: {str(e)}")
 
 def load_user_colors():
-    """Load user colors from colors.txt into a dictionary."""
     user_colors = {}
     try:
         with open('colors.txt', 'r') as f:
@@ -683,62 +674,90 @@ def load_user_colors():
     return user_colors
 
 def save_user_colors():
-    """Save user colors to colors.txt."""
     with open('colors.txt', 'w') as f:
         for username, color in user_colors.items():
             f.write(f"{username},{color}\n")
 
 def customize_user_color(username):
-    """Open a color chooser dialog to set a user's message background color."""
     color = colorchooser.askcolor(title=f"Choose color for {username}")
     if color:
         hex_color = color[1]
         user_colors[username] = hex_color
         save_user_colors()
-        tag = f"user_{username}"
-        chat_area.tag_configure(tag, background=hex_color, spacing3=5)
+
+def add_message_to_frame(username, text, msg_type='message'):
+    global inner_frame, canvas, user_colors, mirc_colors
+    username_width = 20
+
+    # Determine background color based on message type
+    if msg_type == 'message':
+        bg_color = user_colors.get(username, 'white')
+    else:
+        bg_color = 'white'
+
+    # Create a Text widget for the message with word wrapping
+    msg_text = tk.Text(
+        inner_frame,
+        wrap='word',  # Enable word wrapping
+        bg=bg_color,
+        font=('Courier', 10),
+        height=1,  # Initial height; will adjust based on content
+        state='normal',  # Start in normal state to allow text insertion
+        borderwidth=0,  # No border to mimic label appearance
+        highlightthickness=0,  # No focus highlight
+        relief='flat'  # Flat appearance
+    )
+    msg_text.pack(fill='x', padx=5, pady=2)  # Pack with padding and fill horizontally
+
+    if msg_type == 'message':
+        # Configure bold tag for username
+        msg_text.tag_configure('bold', font=('Courier', 10, 'bold'))
+        # Insert username with padding and bold formatting
+        padding = ' ' * (username_width - len(username)) if len(username) <= username_width else ''
+        msg_text.insert('end', padding + username + '   ', 'bold')
+        # Parse and insert message segments with mIRC formatting
+        segments = parse_mirc_message(text)
+        for segment_text, state in segments:
+            tag_name = f"fg{state['fg']}_b{state['bold']}_u{state['underline']}"
+            if tag_name not in msg_text.tag_names():
+                options = {}
+                if state['fg'] != 'default':
+                    options['foreground'] = mirc_colors.get(state['fg'], 'black')
+                if state['bold']:
+                    options['font'] = ('Courier', 10, 'bold')
+                if state['underline']:
+                    options['underline'] = True
+                msg_text.tag_configure(tag_name, **options)
+            msg_text.insert('end', segment_text, tag_name)
+    else:
+        # Handle other message types with plain text
+        if msg_type == 'status':
+            full_text = f"{' ':>{username_width}}   *** {text}"
+        elif msg_type == 'notification':
+            full_text = f"{' ':>{username_width}}   notification: <{username}> {text}"
+        elif msg_type == 'join':
+            full_text = f"{' ':>{username_width}}   --> {username} has joined"
+        elif msg_type == 'part':
+            full_text = f"{' ':>{username_width}}   <-- {username} has left"
+        elif msg_type == 'quit':
+            full_text = f"{' ':>{username_width}}   <-- {username} has quit"
+        else:
+            full_text = text
+        msg_text.insert('end', full_text)
+
+    # Disable editing after text insertion
+    msg_text.config(state='disabled')
+
+    # Update canvas scroll region and scroll to the bottom
+    canvas.update_idletasks()
+    canvas.config(scrollregion=canvas.bbox("all"))
+    canvas.yview_moveto(1.0)
 
 def update_gui():
-    """Update the GUI with incoming events."""
     while not incoming_queue.empty():
         event = incoming_queue.get()
-        chat_area.config(state='normal')
-        if event['type'] == 'message':
-            username = event['user']
-            username_width = 20
-            user_tag = f"user_{username}" if username in user_colors else 'default'
-            padding = ' ' * (username_width - len(username)) if len(username) <= username_width else ''
-            full_line = padding + username + '   ' + event['text'] + '\n'
-            start_idx = chat_area.index('end')
-            chat_area.insert('end', full_line, user_tag)
-            bold_start = f"{start_idx}+{len(padding)}c"
-            bold_end = f"{start_idx}+{len(padding) + len(username)}c"
-            chat_area.tag_add('bold', bold_start, bold_end)
-            message_start = f"{start_idx}+{len(padding) + len(username) + 3}c"
-            current_pos = message_start
-            for text, state in parse_mirc_message(event['text']):
-                segment_end = f"{current_pos}+{len(text)}c"
-                tag_name = get_tag_name(state)
-                if tag_name not in chat_area.tag_names():
-                    options = {}
-                    if state['fg'] != 'default':
-                        options['foreground'] = mirc_colors.get(state['fg'], 'black')
-                    options['font'] = ('Courier', 10, 'bold') if state['bold'] else ('Courier', 10)
-                    if state['underline']:
-                        options['underline'] = True
-                    chat_area.tag_configure(tag_name, **options)
-                chat_area.tag_add(tag_name, current_pos, segment_end)
-                current_pos = segment_end
-        elif event['type'] == 'status':
-            chat_area.insert('end', f"{' ':>{20}}   *** {event['text']}\n", 'default')
-        elif event['type'] == 'notification':
-            chat_area.insert('end', f"{' ':>{20}}   notification: <{event['user']}> {event['text']}\n", 'default')
-        elif event['type'] == 'join':
-            chat_area.insert('end', f"{' ':>{20}}   --> {event['user']} has joined\n", 'default')
-        elif event['type'] == 'part':
-            chat_area.insert('end', f"{' ':>{20}}   <-- {event['user']} has left\n", 'default')
-        elif event['type'] == 'quit':
-            chat_area.insert('end', f"{' ':>{20}}   <-- {event['user']} has quit\n", 'default')
+        if event['type'] in ['message', 'status', 'notification', 'join', 'part', 'quit']:
+            add_message_to_frame(event.get('user', ''), event.get('text', ''), event['type'])
         elif event['type'] == 'userlist':
             user_list.delete(0, 'end')
             for user in event['users']:
@@ -749,12 +768,9 @@ def update_gui():
                     f"👤{user['nick']}"
                 )
                 user_list.insert('end', display)
-        chat_area.config(state='disabled')
-        chat_area.see('end')
     root.after(100, update_gui)
 
 def add_command_to_tab(tab_name, new_command):
-    """Append a new command to the specified tab section in commands.txt."""
     try:
         with open('commands.txt', 'r') as f:
             lines = f.readlines()
@@ -782,7 +798,6 @@ def add_command_to_tab(tab_name, new_command):
         return False
 
 def add_item_to_tab(tab_name):
-    """Add the current entry text to the specified tab and refresh the GUI."""
     new_command = entry.get().strip()
     if new_command:
         if add_command_to_tab(tab_name, new_command):
@@ -793,7 +808,6 @@ def add_item_to_tab(tab_name):
         messagebox.showwarning("Warning", "No text in entry field to add.")
 
 def on_entry_right_click(event):
-    """Display a context menu with tab names and 'Add item' submenus on right-click in entry."""
     menu = tk.Menu(root, tearoff=0)
     for tab_name in all_commands.keys():
         sub_menu = tk.Menu(menu, tearoff=0)
@@ -801,15 +815,7 @@ def on_entry_right_click(event):
         sub_menu.add_command(label="Add item", command=lambda tn=tab_name: add_item_to_tab(tn))
     menu.post(event.x_root, event.y_root)
 
-def on_message_area_right_click(event):
-    """Display a context menu with commands from commands.txt on right-click in chat_area."""
-    menu = tk.Menu(root, tearoff=0)
-    for tab_name, cmd_list in all_commands.items():
-        sub_menu = tk.Menu(menu, tearoff=0)
-        menu.add_cascade(label=tab_name, menu=sub_menu)
-        for cmd in cmd_list:
-            sub_menu.add_command(label=cmd, command=lambda c=cmd: send_queue.put(c))
-    menu.post(event.x_root, event.y_root)
+### Main Execution
 
 if __name__ == '__main__':
     root = tk.Tk()
@@ -839,6 +845,10 @@ if __name__ == '__main__':
     for game_name, actions in games_dict.items():
         games_menu.add_command(label=game_name, command=lambda gn=game_name, acts=actions: open_game_window(gn, acts))
 
+    # Commands menu
+    commands_menu = tk.Menu(menubar, tearoff=0)
+    menubar.add_cascade(label="Commands", menu=commands_menu)
+
     # Helpers menu
     helpers_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Helpers", menu=helpers_menu)
@@ -849,6 +859,7 @@ if __name__ == '__main__':
     commands, user_commands = load_commands()
     all_commands = commands
     current_user_commands = user_commands
+    update_commands_menu()
 
     # Load user colors
     user_colors = load_user_colors()
@@ -874,23 +885,36 @@ if __name__ == '__main__':
     # Widgets inside left_frame using grid
     cmd_frame = tk.Frame(left_frame)
     cmd_frame.grid(row=0, column=0, sticky='nsew')
-    chat_area = scrolledtext.ScrolledText(
-        left_frame,
-        state='disabled',
-        wrap='word',
-        font=('Courier', 10),
-        spacing1=5,
-        spacing3=5
-    )
-    chat_area.grid(row=1, column=0, sticky='nsew')
-    chat_area.bind('<Button-3>', on_message_area_right_click)  # Bind right-click event
 
-    # Configure tags for user colors and default
-    for username, color in user_colors.items():
-        tag = f"user_{username}"
-        chat_area.tag_configure(tag, background=color, spacing3=5)
-    chat_area.tag_configure('default', background='white', spacing3=5)
-    chat_area.tag_configure('bold', font=('Courier', 10, 'bold'))
+    # Message area with canvas and scrollbar
+    message_frame = tk.Frame(left_frame)
+    message_frame.grid(row=1, column=0, sticky='nsew')
+    canvas = tk.Canvas(message_frame)
+    scrollbar = tk.Scrollbar(message_frame, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
+    inner_frame = tk.Frame(canvas)
+    canvas.create_window((0, 0), window=inner_frame, anchor="nw", tags="inner_frame")
+
+    # Configure event to resize inner_frame
+    def on_canvas_configure(event):
+        canvas.itemconfig("inner_frame", width=event.width)
+    canvas.bind("<Configure>", on_canvas_configure)
+
+    # Bind mouse wheel scrolling to canvas
+    def on_mousewheel(event):
+        canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def on_mousewheel_up(event):
+        canvas.yview_scroll(-1, "units")
+
+    def on_mousewheel_down(event):
+        canvas.yview_scroll(1, "units")
+
+    canvas.bind("<MouseWheel>", on_mousewheel)
+    canvas.bind("<Button-4>", on_mousewheel_up)
+    canvas.bind("<Button-5>", on_mousewheel_down)
 
     # Configure left_frame grid
     left_frame.grid_columnconfigure(0, weight=1)

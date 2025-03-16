@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import tkinter as tk
-from tkinter import Listbox, END, Menu, messagebox, ttk
+from tkinter import Listbox, END, Menu, messagebox, ttk, scrolledtext
 import irc.client
 import queue
 import threading
@@ -15,9 +15,10 @@ import tkinter.colorchooser as colorchooser
 ZNC_SERVER = "<server ip>"
 ZNC_PORT = <PORTNUM>
 IRC_NICKNAME = "<ZNC Nick>"
-ZNC_USERNAME = "<znc user> same as nick for now"
-NETWORK = "<Irc network you setup in your bouncer"
+ZNC_USERNAME = "<znc user> same as nick for now>"
+NETWORK = "<Irc network you setup in your bouncer>"
 ZNC_PASSWORD = "<password duh>"
+SERVER_IDENTIFIED_NICK = "<Your nick after connected>"
 
 # Set up logging to console
 logging.basicConfig(
@@ -43,8 +44,7 @@ server_thread = None
 client_infos = []
 client_queues_lock = threading.Lock()
 
-#future use
-SERVER_IDENTIFIED_NICK = ""
+
 
 # mIRC color mapping to Tkinter color names
 mirc_colors = {
@@ -372,10 +372,7 @@ class MyIRCClient(irc.client.SimpleIRCClient):
     def on_privmsg(self, connection, event):
         nick = event.source.nick
         message = event.arguments[0]
-        if nick.lower() == "captainjack":
-            incoming_queue.put({'type': 'message', 'user': nick, 'text': f"(PM) {message}"})
-        else:
-            incoming_queue.put({'type': 'notification', 'user': nick, 'text': message})
+        incoming_queue.put({'type': 'private_message', 'user': nick, 'text': message})
         logger.info(f"Private message from {nick}: {message}")
 
     def on_namreply(self, connection, event):
@@ -462,7 +459,9 @@ def irc_thread_func():
                 client.connection.send_raw(message)
             else:
                 client.connection.privmsg('#pirates', message)
+                add_message_to_frame(SERVER_IDENTIFIED_NICK, message, 'message')
             logger.info(f"Sent: {message}")
+
         while not raw_send_queue.empty():
             raw_command = raw_send_queue.get()
             client.connection.send_raw(raw_command)
@@ -618,7 +617,6 @@ def create_command_tabs(column_count):
             tab.grid_columnconfigure(c, weight=1)
 
 def update_commands_menu():
-    """Update the Commands menu with the current commands."""
     commands_menu.delete(0, 'end')
     for tab_name, cmd_list in all_commands.items():
         sub_menu = tk.Menu(commands_menu, tearoff=0)
@@ -654,6 +652,7 @@ def on_right_click(event):
                 formatted_cmd = cmd.replace('<user>', nickname)
                 sub_menu.add_command(label=formatted_cmd, command=lambda c=formatted_cmd: send_queue.put(c))
         menu.add_separator()
+        menu.add_command(label="Private Chat", command=lambda: open_private_chat(nickname))
         menu.add_command(label="customization", command=lambda: customize_user_color(nickname))
         menu.post(event.x_root, event.y_root)
         logger.info(f"Right-click menu opened for user: {nickname}")
@@ -688,34 +687,26 @@ def customize_user_color(username):
 def add_message_to_frame(username, text, msg_type='message'):
     global inner_frame, canvas, user_colors, mirc_colors
     username_width = 20
-
-    # Determine background color based on message type
     if msg_type == 'message':
         bg_color = user_colors.get(username, 'white')
     else:
         bg_color = 'white'
-
-    # Create a Text widget for the message with word wrapping
     msg_text = tk.Text(
         inner_frame,
-        wrap='word',  # Enable word wrapping
+        wrap='word',
         bg=bg_color,
         font=('Courier', 10),
-        height=1,  # Initial height; will adjust based on content
-        state='normal',  # Start in normal state to allow text insertion
-        borderwidth=0,  # No border to mimic label appearance
-        highlightthickness=0,  # No focus highlight
-        relief='flat'  # Flat appearance
+        height=1,
+        state='normal',
+        borderwidth=0,
+        highlightthickness=0,
+        relief='flat'
     )
-    msg_text.pack(fill='x', padx=5, pady=2)  # Pack with padding and fill horizontally
-
+    msg_text.pack(fill='x', padx=5, pady=2)
     if msg_type == 'message':
-        # Configure bold tag for username
         msg_text.tag_configure('bold', font=('Courier', 10, 'bold'))
-        # Insert username with padding and bold formatting
         padding = ' ' * (username_width - len(username)) if len(username) <= username_width else ''
         msg_text.insert('end', padding + username + '   ', 'bold')
-        # Parse and insert message segments with mIRC formatting
         segments = parse_mirc_message(text)
         for segment_text, state in segments:
             tag_name = f"fg{state['fg']}_b{state['bold']}_u{state['underline']}"
@@ -730,7 +721,6 @@ def add_message_to_frame(username, text, msg_type='message'):
                 msg_text.tag_configure(tag_name, **options)
             msg_text.insert('end', segment_text, tag_name)
     else:
-        # Handle other message types with plain text
         if msg_type == 'status':
             full_text = f"{' ':>{username_width}}   *** {text}"
         elif msg_type == 'notification':
@@ -744,11 +734,7 @@ def add_message_to_frame(username, text, msg_type='message'):
         else:
             full_text = text
         msg_text.insert('end', full_text)
-
-    # Disable editing after text insertion
     msg_text.config(state='disabled')
-
-    # Update canvas scroll region and scroll to the bottom
     canvas.update_idletasks()
     canvas.config(scrollregion=canvas.bbox("all"))
     canvas.yview_moveto(1.0)
@@ -756,7 +742,14 @@ def add_message_to_frame(username, text, msg_type='message'):
 def update_gui():
     while not incoming_queue.empty():
         event = incoming_queue.get()
-        if event['type'] in ['message', 'status', 'notification', 'join', 'part', 'quit']:
+        if event['type'] == 'private_message':
+            user = event['user']
+            text = event['text']
+            if user in private_chat_windows:
+                private_chat_windows[user].add_message(user, text, "contact")
+            else:
+                add_message_to_frame(user, f"(PM) {text}", 'message')
+        elif event['type'] in ['message', 'status', 'notification', 'join', 'part', 'quit']:
             add_message_to_frame(event.get('user', ''), event.get('text', ''), event['type'])
         elif event['type'] == 'userlist':
             user_list.delete(0, 'end')
@@ -814,6 +807,57 @@ def on_entry_right_click(event):
         menu.add_cascade(label=tab_name, menu=sub_menu)
         sub_menu.add_command(label="Add item", command=lambda tn=tab_name: add_item_to_tab(tn))
     menu.post(event.x_root, event.y_root)
+
+class PrivateChatWindow(tk.Toplevel):
+    def __init__(self, parent, nickname):
+        tk.Toplevel.__init__(self, parent)
+        self.nickname = nickname
+        self.title(f"Chat with {nickname}")
+        self.geometry("400x600")
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        contact_frame = tk.Frame(self, bg="#ADD8E6")
+        tk.Label(contact_frame, text=nickname, font=("Arial", 12, "bold"), bg="#ADD8E6").pack(padx=5, pady=5)
+        contact_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        tk.Frame(self, height=2, bd=1, relief=tk.SUNKEN, bg="gray").grid(row=1, column=0, sticky="ew")
+        self.chat_history = scrolledtext.ScrolledText(self, height=20, width=50, wrap=tk.WORD, borderwidth=2, relief=tk.SUNKEN, bg="white", font=("Arial", 10))
+        self.chat_history.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
+        self.chat_history.tag_configure("contact", foreground="blue")
+        self.chat_history.tag_configure("user", foreground="black")
+        self.chat_history.config(state=tk.DISABLED)
+        tk.Frame(self, height=2, bd=1, relief=tk.SUNKEN, bg="gray").grid(row=3, column=0, sticky="ew")
+        bottom_frame = tk.Frame(self, bg="#F0F0F0")
+        bottom_frame.grid(row=4, column=0, sticky="ew", padx=5, pady=5)
+        self.input_text = tk.Text(bottom_frame, height=3, width=40, borderwidth=2, relief=tk.SUNKEN, font=("Arial", 10), bg="white")
+        self.input_text.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=(0, 5))
+        self.input_text.focus_set()
+        tk.Button(bottom_frame, text="Send", font=("Arial", 10), bg="#D3D3D3", command=self.send_message).pack(side=tk.RIGHT)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def send_message(self):
+        message = self.input_text.get("1.0", tk.END).strip()
+        if message:
+            send_queue.put(f"PRIVMSG {self.nickname} :{message}")
+            self.add_message("You", message, "user")
+            self.input_text.delete("1.0", tk.END)
+
+    def add_message(self, sender, message, tag):
+        self.chat_history.config(state=tk.NORMAL)
+        self.chat_history.insert(tk.END, f"{sender}: {message}\n", tag)
+        self.chat_history.config(state=tk.DISABLED)
+        self.chat_history.see(tk.END)
+
+    def on_close(self):
+        if self.nickname in private_chat_windows:
+            del private_chat_windows[self.nickname]
+        self.destroy()
+
+def open_private_chat(nickname):
+    if nickname in private_chat_windows:
+        private_chat_windows[nickname].lift()
+    else:
+        window = PrivateChatWindow(root, nickname)
+        private_chat_windows[nickname] = window
 
 ### Main Execution
 
@@ -941,6 +985,9 @@ if __name__ == '__main__':
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=1)
+
+    # Dictionary to track private chat windows
+    private_chat_windows = {}
 
     irc_thread = threading.Thread(target=irc_thread_func)
     irc_thread.daemon = True

@@ -10,16 +10,6 @@ import logging
 from PIL import Image, ImageTk, ImageEnhance
 import tkinter.colorchooser as colorchooser
 
-
-# Hardcoded ZNC connection details
-ZNC_SERVER = "<server ip>"
-ZNC_PORT = <PORTNUM>
-IRC_NICKNAME = "<ZNC Nick>"
-ZNC_USERNAME = "<znc user> same as nick for now>"
-NETWORK = "<Irc network you setup in your bouncer>"
-ZNC_PASSWORD = "<password duh>"
-SERVER_IDENTIFIED_NICK = "<Your nick after connected>"
-
 # Set up logging to console
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +34,14 @@ server_thread = None
 client_infos = []
 client_queues_lock = threading.Lock()
 
-
+# Hardcoded ZNC connection details
+ZNC_SERVER = "174.136.99.2"
+ZNC_PORT = 1026
+IRC_NICKNAME = "scrompie"
+ZNC_USERNAME = "scrompie"
+NETWORK = "2600"
+ZNC_PASSWORD = "12QWaszx#$"
+SERVER_IDENTIFIED_NICK = "Oo"
 
 # mIRC color mapping to Tkinter color names
 mirc_colors = {
@@ -53,6 +50,23 @@ mirc_colors = {
     '10': 'darkcyan', '11': 'cyan', '12': 'skyblue', '13': 'fuchsia',
     '14': 'gray', '15': 'silver'
 }
+
+# Default color settings
+default_bg_color = '#FFFFFF'  # White
+default_fg_color = '#000000'  # Black
+
+# Load colors from config.txt or create it with defaults
+try:
+    with open('config.txt', 'r') as f:
+        for line in f:
+            if line.startswith('background_color='):
+                default_bg_color = line.strip().split('=')[1]
+            elif line.startswith('text_color='):
+                default_fg_color = line.strip().split('=')[1]
+except FileNotFoundError:
+    with open('config.txt', 'w') as f:
+        f.write(f"background_color={default_bg_color}\n")
+        f.write(f"text_color={default_fg_color}\n")
 
 # Load dictionary for Wordel helper
 try:
@@ -283,6 +297,74 @@ def open_service_window():
             port_entry.config(state='normal')
     update_ui()
     service_window.protocol("WM_DELETE_WINDOW", service_window.destroy)
+
+def set_default_colors():
+    """Open a window to set default background and foreground colors."""
+    # Create the color selection window
+    color_window = tk.Toplevel(root)
+    color_window.title("Default Colors")
+    color_window.geometry("400x400")
+    color_window.resizable(False, False)  # Prevent resizing for consistent layout
+
+    # Temporary variables to hold color selections until confirmed
+    temp_bg_color = default_bg_color
+    temp_fg_color = default_fg_color
+
+    # Background Color section
+    bg_label = tk.Label(color_window, text="Background Color")
+    bg_label.grid(row=0, column=0, padx=10, pady=10)
+
+    bg_frame = tk.Frame(color_window, width=50, height=50, bg=temp_bg_color, borderwidth=2, relief="solid")
+    bg_frame.grid(row=0, column=1, padx=10, pady=10)
+
+    def change_bg_color(event):
+        nonlocal temp_bg_color
+        new_color = colorchooser.askcolor(initialcolor=temp_bg_color)
+        if new_color[1]:  # Check if a color was selected (not cancelled)
+            temp_bg_color = new_color[1]
+            bg_frame.config(bg=temp_bg_color)
+
+    bg_frame.bind("<Button-1>", change_bg_color)
+
+    # Foreground Color section
+    fg_label = tk.Label(color_window, text="Foreground Color")
+    fg_label.grid(row=1, column=0, padx=10, pady=10)
+
+    fg_frame = tk.Frame(color_window, width=50, height=50, bg=temp_fg_color, borderwidth=2, relief="solid")
+    fg_frame.grid(row=1, column=1, padx=10, pady=10)
+
+    def change_fg_color(event):
+        nonlocal temp_fg_color
+        new_color = colorchooser.askcolor(initialcolor=temp_fg_color)
+        if new_color[1]:  # Check if a color was selected (not cancelled)
+            temp_fg_color = new_color[1]
+            fg_frame.config(bg=temp_fg_color)
+
+    fg_frame.bind("<Button-1>", change_fg_color)
+
+    # Button functions
+    def on_ok():
+        global default_bg_color, default_fg_color
+        default_bg_color = temp_bg_color  # Update global variables
+        default_fg_color = temp_fg_color
+        with open('config.txt', 'w') as f:  # Save to config file
+            f.write(f"background_color={default_bg_color}\n")
+            f.write(f"text_color={default_fg_color}\n")
+        color_window.destroy()  # Close the window
+
+    def on_cancel():
+        color_window.destroy()  # Close without saving
+
+    # Buttons
+    cancel_button = tk.Button(color_window, text="Cancel", command=on_cancel)
+    cancel_button.grid(row=2, column=0, pady=20)
+
+    ok_button = tk.Button(color_window, text="OK", command=on_ok)
+    ok_button.grid(row=2, column=1, pady=20)
+
+    # Center the content horizontally
+    color_window.grid_columnconfigure(0, weight=1)
+    color_window.grid_columnconfigure(1, weight=1)
 
 ### IRC Client Class
 
@@ -626,11 +708,13 @@ def update_commands_menu():
 
 def on_right_click(event):
     try:
+        # Get the selected user from the list
         index = user_list.nearest(event.y)
         user_list.selection_clear(0, END)
         user_list.selection_set(index)
         selection = user_list.get(index)
-        logger.info(f"Raw selection from Listbox: '{selection}'")
+
+        # Extract the nickname (removing emojis or extra text)
         emojis = ['👑', '🎙️', '👤', '🌙']
         for emoji in emojis:
             if selection.startswith(emoji):
@@ -642,22 +726,30 @@ def on_right_click(event):
                 break
         else:
             nickname = selection
-            logger.warning(f"No known emoji found in selection: '{selection}'")
-        logger.info(f"Extracted nickname: '{nickname}'")
+
+        # Create the right-click menu
         menu = tk.Menu(root, tearoff=0)
+
+        # Add user commands from user-commands.txt
         for menu_name, cmd_list in current_user_commands.items():
             sub_menu = tk.Menu(menu, tearoff=0)
             menu.add_cascade(label=menu_name, menu=sub_menu)
             for cmd in cmd_list:
                 formatted_cmd = cmd.replace('<user>', nickname)
                 sub_menu.add_command(label=formatted_cmd, command=lambda c=formatted_cmd: send_queue.put(c))
+
+        # Add a separator for clarity
         menu.add_separator()
+
+        # Add the static options
         menu.add_command(label="Private Chat", command=lambda: open_private_chat(nickname))
-        menu.add_command(label="customization", command=lambda: customize_user_color(nickname))
+        menu.add_command(label="Background Color", command=lambda: customize_user_bg_color(nickname))
+        menu.add_command(label="Text Color", command=lambda: customize_user_fg_color(nickname))
+
+        # Show the menu
         menu.post(event.x_root, event.y_root)
-        logger.info(f"Right-click menu opened for user: {nickname}")
     except Exception as e:
-        logger.error(f"Failed to open right-click menu: {str(e)}")
+        print(f"Error in right-click menu: {e}")
 
 def load_user_colors():
     user_colors = {}
@@ -665,36 +757,56 @@ def load_user_colors():
         with open('colors.txt', 'r') as f:
             for line in f:
                 parts = line.strip().split(',')
-                if len(parts) == 2:
-                    username, color = parts
-                    user_colors[username] = color
+                if len(parts) == 2:  # Old format: nick, bg_color
+                    username, bg_color = parts
+                    user_colors[username] = {'bg': bg_color, 'fg': default_fg_color}  # Default text color
+                elif len(parts) == 3:  # New format: nick, bg_color, fg_color
+                    username, bg_color, fg_color = parts
+                    user_colors[username] = {'bg': bg_color, 'fg': fg_color}
     except FileNotFoundError:
-        pass
+        pass  # File doesn’t exist yet, start with empty dict
     return user_colors
 
 def save_user_colors():
     with open('colors.txt', 'w') as f:
-        for username, color in user_colors.items():
-            f.write(f"{username},{color}\n")
+        for username, colors in user_colors.items():
+            bg_color = colors.get('bg', default_bg_color)  # Default if not set
+            fg_color = colors.get('fg', default_fg_color)  # Default if not set
+            f.write(f"{username},{bg_color},{fg_color}\n")
 
-def customize_user_color(username):
-    color = colorchooser.askcolor(title=f"Choose color for {username}")
+def customize_user_bg_color(username):
+    color = colorchooser.askcolor(title=f"Choose background color for {username}")
+    if color:  # Returns (RGB, hex_color) or None if canceled
+        hex_color = color[1]
+        if username not in user_colors:
+            user_colors[username] = {}
+        user_colors[username]['bg'] = hex_color
+        save_user_colors()
+
+def customize_user_fg_color(username):
+    color = colorchooser.askcolor(title=f"Choose text color for {username}")
     if color:
         hex_color = color[1]
-        user_colors[username] = hex_color
+        if username not in user_colors:
+            user_colors[username] = {}
+        user_colors[username]['fg'] = hex_color
         save_user_colors()
 
 def add_message_to_frame(username, text, msg_type='message'):
     global inner_frame, canvas, user_colors, mirc_colors
     username_width = 20
     if msg_type == 'message':
-        bg_color = user_colors.get(username, 'white')
+        colors = user_colors.get(username, {})
+        bg_color = colors.get('bg', default_bg_color)
+        fg_color = colors.get('fg', default_fg_color)
     else:
-        bg_color = 'white'
+        bg_color = default_bg_color
+        fg_color = default_fg_color
     msg_text = tk.Text(
         inner_frame,
         wrap='word',
         bg=bg_color,
+        fg=fg_color,
         font=('Courier', 10),
         height=1,
         state='normal',
@@ -831,7 +943,7 @@ class PrivateChatWindow(tk.Toplevel):
         self.input_text = tk.Text(bottom_frame, height=3, width=40, borderwidth=2, relief=tk.SUNKEN, font=("Arial", 10), bg="white")
         self.input_text.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=(0, 5))
         self.input_text.focus_set()
-        tk.Button(bottom_frame, text="Send", font=("Arial", 10), bg="#D3D3D3", command=self.send_message).pack(side=tk.RIGHT)
+        tk.Button(custom_frame, text="Send", font=("Arial", 10), bg="#D3D3D3", command=self.send_message).pack(side=tk.RIGHT)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def send_message(self):
@@ -879,6 +991,7 @@ if __name__ == '__main__':
     column_menu.add_command(label="4", command=lambda: set_column_count(4))
     column_menu.add_command(label="5", command=lambda: set_column_count(5))
     column_menu.add_command(label="6", command=lambda: set_column_count(6))
+    file_menu.add_command(label="Default Colors", command=set_default_colors)
     file_menu.add_separator()
     file_menu.add_command(label="Exit", command=root.quit)
 
@@ -939,6 +1052,7 @@ if __name__ == '__main__':
     scrollbar.pack(side="right", fill="y")
     canvas.pack(side="left", fill="both", expand=True)
     inner_frame = tk.Frame(canvas)
+    inner_frame.config(bg=default_bg_color)
     canvas.create_window((0, 0), window=inner_frame, anchor="nw", tags="inner_frame")
 
     # Configure event to resize inner_frame

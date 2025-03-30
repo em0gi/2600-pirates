@@ -1,0 +1,2 @@
+background_color=#0a0603
+text_color=#fefefe

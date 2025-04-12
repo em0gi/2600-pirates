@@ -35,13 +35,13 @@ client_infos = []
 client_queues_lock = threading.Lock()
 
 # Hardcoded ZNC connection details
-ZNC_SERVER = "174.136.99.2"
-ZNC_PORT = 1026
-IRC_NICKNAME = "scrompie"
-ZNC_USERNAME = "scrompie"
+ZNC_SERVER = "<server ip>"
+ZNC_PORT = <port>
+IRC_NICKNAME = "<username>"
+ZNC_USERNAME = "<username>"
 NETWORK = "2600"
-ZNC_PASSWORD = "12QWaszx#$"
-SERVER_IDENTIFIED_NICK = "Oo"
+ZNC_PASSWORD = "<password>"
+SERVER_IDENTIFIED_NICK = "<server side nick>"
 
 # mIRC color mapping to Tkinter color names
 mirc_colors = {
